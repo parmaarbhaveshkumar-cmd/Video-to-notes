@@ -1,0 +1,7 @@
+{
+  "name": "Lecture to Exam AI",
+  "description": "Mobile-first AI study app for engineering students converting classroom lectures into structured, exam-ready notes, engineering diagrams, and revision quizzes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
