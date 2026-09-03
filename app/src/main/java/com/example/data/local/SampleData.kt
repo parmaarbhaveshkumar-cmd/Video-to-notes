@@ -159,18 +159,22 @@ object SampleData {
             )
         )
 
-        return listOf(
-            SubjectEntity("subj_1", "Engineering Thermodynamics", "ET-302", "Semester 3", JsonUtils.syllabusListToJson(thermoSyllabus)),
-            SubjectEntity("subj_2", "Material Science", "MS-304", "Semester 3", JsonUtils.syllabusListToJson(matScienceSyllabus)),
-            SubjectEntity("subj_3", "Mathematics", "MATH-301", "Semester 3", JsonUtils.syllabusListToJson(mathSyllabus)),
-            SubjectEntity("subj_4", "Mechanical Design", "MD-401", "Semester 4", JsonUtils.syllabusListToJson(mechDesignSyllabus)),
-            SubjectEntity("subj_5", "Machine Drawing", "MD-303", "Semester 3", JsonUtils.syllabusListToJson(machineDrawingSyllabus)),
-            SubjectEntity("subj_6", "Manufacturing", "MFG-305", "Semester 3", JsonUtils.syllabusListToJson(mfgSyllabus)),
-            SubjectEntity("subj_7", "Metrology", "MET-402", "Semester 4", JsonUtils.syllabusListToJson(metrologySyllabus))
-        )
+        return emptyList()
+    }
+
+    fun getDefaultChapters(): List<com.example.data.model.ChapterEntity> {
+        return emptyList()
+    }
+
+    fun getDefaultNotes(): List<com.example.data.model.NoteEntity> {
+        return emptyList()
     }
 
     fun getDefaultLectures(): List<LectureEntity> {
+        return emptyList()
+    }
+
+    fun getSampleExampleLectures(): List<LectureEntity> {
         val ottoTopic = TopicSection(
             topicId = "top_otto_1",
             topicName = "Air Standard Otto Cycle",

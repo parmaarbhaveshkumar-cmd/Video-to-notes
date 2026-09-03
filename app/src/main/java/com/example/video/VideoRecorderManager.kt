@@ -348,14 +348,19 @@ class VideoRecorderManager(private val context: Context) {
             cameraProviderFuture.addListener({
                 try {
                     val cameraProvider = cameraProviderFuture.get()
-                    val preview = Preview.Builder().build().also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
+                    val hasBack = cameraProvider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)
+                    val hasFront = cameraProvider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)
 
-                    val selector = if (_cameraFacing.value == CameraFacing.BACK) {
+                    val selector = if (_cameraFacing.value == CameraFacing.FRONT && hasFront) {
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    } else if (hasBack) {
                         CameraSelector.DEFAULT_BACK_CAMERA
                     } else {
                         CameraSelector.DEFAULT_FRONT_CAMERA
+                    }
+
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
                     }
 
                     cameraProvider.unbindAll()

@@ -206,9 +206,67 @@ data class LectureEntity(
 data class SubjectEntity(
     @PrimaryKey val id: String,
     val name: String,
-    val code: String,
-    val semester: String,
-    val syllabusJson: String // JSON serialized List<SyllabusUnit>
+    val code: String = "",
+    val semester: String = "",
+    val syllabusJson: String = "[]", // JSON serialized List<SyllabusUnit>
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "chapters")
+data class ChapterEntity(
+    @PrimaryKey val id: String,
+    val subjectId: String,
+    val name: String,
+    val chapterNumber: Int = 1,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "notes")
+data class NoteEntity(
+    @PrimaryKey val id: String,
+    val subjectId: String,
+    val chapterId: String,
+    val title: String,
+    val topic: String = "",
+    val content: String = "",
+    val formulas: String = "",
+    val importantPoints: String = "",
+    val pdfPath: String? = null,
+    val isBookmarked: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "note_figures")
+data class NoteFigureEntity(
+    @PrimaryKey val id: String,
+    val noteId: String,
+    val chapterId: String,
+    val subjectId: String,
+    val imagePath: String,
+    val caption: String = "",
+    val rotationDegrees: Int = 0,
+    val orderIndex: Int = 0,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class NoteWithFigures(
+    val note: NoteEntity,
+    val figures: List<NoteFigureEntity> = emptyList()
+)
+
+data class SubjectWithStats(
+    val subject: SubjectEntity,
+    val chapterCount: Int = 0,
+    val noteCount: Int = 0
+)
+
+data class NoteSearchResult(
+    val note: NoteEntity,
+    val subjectName: String,
+    val chapterName: String,
+    val figureCount: Int,
+    val matchedField: String
 )
 
 @Entity(tableName = "pyq_records")
@@ -217,3 +275,4 @@ data class PyqEntity(
     val subjectName: String,
     val pyqListJson: String // JSON serialized List<PyqItem>
 )
+

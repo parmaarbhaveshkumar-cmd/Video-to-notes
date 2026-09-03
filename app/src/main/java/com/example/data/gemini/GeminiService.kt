@@ -216,15 +216,47 @@ class GeminiService {
             }))
         }
 
-        val request = Request.Builder()
-            .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
-            .post(jsonBody.toString().toRequestBody(jsonMediaType))
-            .build()
+        val primaryModel = "gemini-2.5-flash"
+        val fallbackModel = "gemini-2.0-flash"
+        
+        var responseBody = ""
+        var success = false
 
-        val response = client.newCall(request).execute()
-        val responseBody = response.body?.string() ?: ""
-        if (!response.isSuccessful) {
-            throw Exception("Gemini API error code: ${response.code} $responseBody")
+        // Attempt primary Free Tier model
+        try {
+            val request = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/models/$primaryModel:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                .post(jsonBody.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            val response = client.newCall(request).execute()
+            responseBody = response.body?.string() ?: ""
+            if (response.code == 429 || responseBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true) || responseBody.contains("quota", ignoreCase = true)) {
+                throw Exception("Free AI usage limit reached. Please wait a moment and try again.")
+            }
+            if (response.isSuccessful) {
+                success = true
+            }
+        } catch (e: Exception) {
+            if (e.message?.contains("Free AI usage limit reached") == true) {
+                throw e
+            }
+            Log.w("GeminiService", "Primary free model $primaryModel failed, attempting $fallbackModel", e)
+        }
+
+        if (!success) {
+            val fallbackRequest = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/models/$fallbackModel:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                .post(jsonBody.toString().toRequestBody(jsonMediaType))
+                .build()
+            val fbResponse = client.newCall(fallbackRequest).execute()
+            responseBody = fbResponse.body?.string() ?: ""
+            if (fbResponse.code == 429 || responseBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true) || responseBody.contains("quota", ignoreCase = true)) {
+                throw Exception("Free AI usage limit reached. Please wait a moment and try again.")
+            }
+            if (!fbResponse.isSuccessful) {
+                throw Exception("Gemini API error code: ${fbResponse.code} $responseBody")
+            }
         }
 
         val jsonRoot = JSONObject(responseBody)
@@ -271,22 +303,30 @@ class GeminiService {
                 }
 
                 val request = Request.Builder()
-                    .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                    .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
                     .post(jsonBody.toString().toRequestBody(jsonMediaType))
                     .build()
 
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: ""
-                val jsonRoot = JSONObject(responseBody)
-                val text = jsonRoot.getJSONArray("candidates")
-                    .getJSONObject(0)
-                    .getJSONObject("content")
-                    .getJSONArray("parts")
-                    .getJSONObject(0)
-                    .getString("text")
-                return@withContext text
+                if (response.code == 429 || responseBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true) || responseBody.contains("quota", ignoreCase = true)) {
+                    return@withContext "Free AI usage limit reached. Please wait a moment and try again."
+                }
+                if (response.isSuccessful) {
+                    val jsonRoot = JSONObject(responseBody)
+                    val text = jsonRoot.getJSONArray("candidates")
+                        .getJSONObject(0)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text")
+                    return@withContext text
+                }
             } catch (e: Exception) {
                 Log.e("GeminiService", "Chat API failed, using contextual fallback", e)
+                if (e.message?.contains("Free AI usage limit reached") == true) {
+                    return@withContext "Free AI usage limit reached. Please wait a moment and try again."
+                }
             }
         }
 
@@ -314,21 +354,21 @@ class GeminiService {
             }
             "formula" in lower || "equation" in lower -> {
                 "📐 **Key Formulas for this Topic:**\n\n" +
-                        "1. η_otto = 1 - 1 / (r^(γ - 1)) (where r = V1/V2 and γ = 1.4)\n" +
-                        "2. η_carnot = 1 - (TL / TH) (Temperatures must strictly be in Kelvin)\n" +
-                        "3. W_net = Q_in - Q_out = m Cv (T3 - T2) - m Cv (T4 - T1)\n" +
-                        "4. MEP = W_net / Vs = W_net / (V1 - V2) (Mean Effective Pressure in bar/kPa)"
+                "1. η = 1 - (1 / (r^(γ - 1))) (Thermodynamic efficiency with compression ratio r and γ = 1.4)\n" +
+                "2. σ = P / A (Normal stress in N/m² or Pa)\n" +
+                "3. ε = ΔL / L0 (Engineering strain, dimensionless)\n" +
+                "4. W_net = ∮ P dV (Net work cycle boundary work in Joules)"
             }
             "mcq" in lower || "quiz" in lower || "test" in lower -> {
                 "🧠 **Sample High-Yield MCQs:**\n\n" +
-                        "1. Thermal efficiency of Otto cycle increases when:\n" +
-                        "   A) Compression ratio increases [✓ Correct]\n" +
-                        "   B) Compression ratio decreases\n" +
-                        "   C) Engine speed decreases\n\n" +
-                        "2. In a P-V diagram of Otto cycle, heat addition is represented by:\n" +
-                        "   A) Vertical straight line (Constant Volume) [✓ Correct]\n" +
-                        "   B) Horizontal straight line\n" +
-                        "   C) Hyperbolic curve"
+                        "1. Which parameter directly governs thermal efficiency in air-standard cycles?\n" +
+                        "   A) Compression ratio [✓ Correct]\n" +
+                        "   B) Ambient humidity\n" +
+                        "   C) Oil viscosity\n\n" +
+                        "2. In constant-volume heat addition, the work done dW is:\n" +
+                        "   A) Zero (P dV = 0) [✓ Correct]\n" +
+                        "   B) Maximum\n" +
+                        "   C) Negative"
             }
             else -> {
                 "💡 **Key Exam Summary:**\n\n" +
@@ -352,12 +392,9 @@ class GeminiService {
             "rankine" in lower || "steam" in lower -> listOf(getRankineCycleTopic())
             "mohr" in lower || "stress" in lower -> listOf(getMohrCircleTopic())
             "fourier" in lower || "math" in lower -> listOf(getFourierSeriesTopic())
-            "mat" in subject.lowercase() || "tensile" in lower -> SampleData.getDefaultLectures()[1].let {
-                JsonUtils.topicListFromJson(it.topicsJson)
-            }
-            else -> SampleData.getDefaultLectures()[0].let {
-                JsonUtils.topicListFromJson(it.topicsJson)
-            }
+            "mat" in subject.lowercase() || "tensile" in lower || "strain" in lower -> listOf(getTensileTestTopic())
+            "otto" in lower || "thermo" in subject.lowercase() -> listOf(getOttoCycleTopic())
+            else -> listOf(getGenericEngineeringTopic(title, subject, unitName, rawText))
         }
     }
 
@@ -701,5 +738,210 @@ class GeminiService {
                 examinerTip = topic.importantExamPoints.firstOrNull() ?: "State assumptions and SI units clearly."
             )
         }
+    }
+
+    private fun getOttoCycleTopic(): TopicSection {
+        return TopicSection(
+            topicId = "top_otto_std",
+            topicName = "Air-Standard Otto Cycle (P-V and T-S Analysis)",
+            timestampSeconds = 45,
+            definition = "The Otto cycle is the ideal four-stroke air-standard thermodynamic cycle for spark-ignition petrol engines, consisting of two reversible adiabatics and two constant-volume processes.",
+            simpleExplanation = "In the Otto cycle, air-fuel mixture is compressed isentropically (1-2), spark ignites the charge causing instant constant-volume heat addition (2-3), power stroke expands the gas isentropically (3-4), and exhaust heat drops pressure at constant volume (4-1).",
+            keyPoints = listOf(
+                "Heat addition occurs at constant volume (V2 = V3).",
+                "Heat rejection occurs at constant volume (V4 = V1).",
+                "Thermal efficiency depends solely on compression ratio r = V1/V2 and γ = 1.4.",
+                "Practical compression ratio is limited to 8-11 to avoid engine knock."
+            ),
+            workingProcess = "1-2: Isentropic compression (s1 = s2, P1*V1^γ = P2*V2^γ).\n2-3: Constant volume heat addition (Qin = m*Cv*(T3-T2)).\n3-4: Isentropic expansion power stroke (s3 = s4).\n4-1: Constant volume heat rejection (Qout = m*Cv*(T4-T1)).",
+            formula = "η_otto = 1 - (1 / (r^(γ - 1)))",
+            variablesAndUnits = listOf(
+                "η_otto = Thermal efficiency (dimensionless / %)",
+                "r = Compression ratio = V1 / V2 (dimensionless, 6-11)",
+                "γ = Ratio of specific heats (1.4 for air)",
+                "Qin = Heat supplied (kJ/kg)"
+            ),
+            exampleProblem = "For r = 8 and γ = 1.4: η_otto = 1 - 1/(8^0.4) = 1 - 1/2.297 = 1 - 0.435 = 0.565 (56.5%).",
+            advantages = listOf("High thermal efficiency for small displacements.", "Compact and lightweight engine architecture."),
+            disadvantages = listOf("Prone to abnormal combustion (knocking) at higher compression ratios.", "Higher throttling losses at part load."),
+            applications = listOf("Passenger cars, motorcycles, handheld garden equipment, light aircraft."),
+            importantExamPoints = listOf(
+                "⭐ Exam Rule: η_otto increases monotonically with compression ratio r.",
+                "🔥 5-Mark derivation of η = 1 - 1/r^(γ-1) is frequently asked with P-V diagram.",
+                "💡 Work done W_net = Q_in - Q_out = m*Cv*[(T3-T2) - (T4-T1)]."
+            ),
+            answers = listOf(
+                MarkAnswer(
+                    2,
+                    "2-Mark Answer: Compression Ratio of Otto Cycle",
+                    listOf("Definition r = V1/V2", "Typical numeric values"),
+                    "Compression ratio (r) is the ratio of total cylinder volume at BDC (V1) to the clearance volume at TDC (V2).\nFormula: r = V1 / V2 = (Vs + Vc) / Vc. For petrol engines, r ranges between 7:1 and 11:1."
+                ),
+                MarkAnswer(
+                    5,
+                    "5-Mark Answer: State 4 Processes of Air-Standard Otto Cycle",
+                    listOf("1-2, 2-3, 3-4, 4-1 process descriptions", "Governing equations"),
+                    "The four reversible processes of the Otto cycle are:\n1. Process 1-2: Reversible adiabatic compression (P·V^γ = C, s1 = s2).\n2. Process 2-3: Constant volume heat addition (v = C, Q_in = m·Cv·(T3 - T2)).\n3. Process 3-4: Reversible adiabatic expansion / power stroke (P·V^γ = C, s3 = s4).\n4. Process 4-1: Constant volume heat rejection (v = C, Q_out = m·Cv·(T4 - T1))."
+                )
+            ),
+            diagram = EngineeringDiagramData(
+                type = DiagramType.PV_DIAGRAM_OTTO,
+                title = "Air-Standard Otto Cycle (P-V Diagram)",
+                xAxisLabel = "Volume V (m³)",
+                yAxisLabel = "Pressure P (kPa)",
+                points = listOf(
+                    DiagramPoint(0.85f, 0.2f, "1", "1: BDC Intake (P1, V1)"),
+                    DiagramPoint(0.25f, 0.45f, "2", "2: TDC End Compression (P2, V2)"),
+                    DiagramPoint(0.25f, 0.9f, "3", "3: Peak Combustion (P3, V3)"),
+                    DiagramPoint(0.85f, 0.4f, "4", "4: End Expansion (P4, V4)")
+                ),
+                processLabels = listOf(
+                    "1-2: Isentropic Compression",
+                    "2-3: Const. Volume Heat Addition (Qin)",
+                    "3-4: Isentropic Expansion",
+                    "4-1: Const. Volume Heat Rejection (Qout)"
+                ),
+                notes = "Net Work Output equals the enclosed area 1-2-3-4.",
+                formula = "η = 1 - 1 / r^(γ-1)"
+            )
+        )
+    }
+
+    private fun getTensileTestTopic(): TopicSection {
+        return TopicSection(
+            topicId = "top_tensile_std",
+            topicName = "Stress-Strain Behavior & Tensile Testing",
+            timestampSeconds = 60,
+            definition = "Tensile testing subjects a standard cylindrical specimen to uniaxial tensile force until fracture, generating the engineering stress-strain diagram.",
+            simpleExplanation = "As load increases on the metal sample, it first stretches elastically according to Hooke's Law (slope = Young's Modulus E). Beyond the yield point, plastic deformation occurs permanently until ultimate strength and necking culminate in cup-and-cone fracture.",
+            keyPoints = listOf(
+                "Hooke's law holds strictly up to the Proportional Limit (σ = E · ε).",
+                "Yield point marks the onset of permanent plastic deformation.",
+                "Ultimate Tensile Strength (UTS) is the maximum nominal stress sustained.",
+                "Necking begins immediately after the UTS peak in ductile materials."
+            ),
+            workingProcess = "1. Mount specimen in Universal Testing Machine (UTM) grips.\n2. Apply continuous tensile load and record elongation.\n3. Calculate engineering stress: σ = P / A0 and engineering strain: ε = ΔL / L0.\n4. Determine yield strength, UTS, percent elongation, and reduction in area.",
+            formula = "σ = E · ε   and   UTS = P_max / A0",
+            variablesAndUnits = listOf(
+                "σ = Engineering stress (MPa or N/mm²)",
+                "ε = Engineering strain (dimensionless)",
+                "E = Young's Modulus of Elasticity (GPa)",
+                "A0 = Original cross-sectional area (mm²)"
+            ),
+            exampleProblem = "For a 10 mm diameter bar under 20 kN load: A0 = π/4*(10)² = 78.54 mm². Stress σ = 20,000 N / 78.54 mm² = 254.6 MPa. With E = 200 GPa: ε = 254.6 / 200,000 = 0.00127 (0.127%).",
+            advantages = listOf("Provides fundamental mechanical properties for safe component design.", "Standardized ASTM/ISO procedure with high reproducibility."),
+            disadvantages = listOf("Destructive test; specimen cannot be reused.", "Engineering stress ignores instantaneous cross-sectional necking reduction."),
+            applications = listOf("Structural steel quality assurance, aerospace alloy qualification, automotive crashworthiness."),
+            importantExamPoints = listOf(
+                "⭐ Mandatory 7-Mark Question: Draw Mild Steel Stress-Strain curve and label all 6 points.",
+                "💡 0.2% Proof Stress offset method is used for materials without distinct yield point (Al, Cu).",
+                "🔥 Ductile fracture exhibits characteristic 45° shear cup-and-cone surface."
+            ),
+            answers = listOf(
+                MarkAnswer(
+                    2,
+                    "2-Mark Answer: State Hooke's Law and its Limit",
+                    listOf("Statement of Hooke's law", "Proportional limit"),
+                    "Hooke's Law states that within the proportional limit, stress is directly proportional to strain: σ ∝ ε or σ = E · ε, where E is Young's modulus of elasticity."
+                ),
+                MarkAnswer(
+                    5,
+                    "5-Mark Answer: Distinguish Between Engineering and True Stress-Strain",
+                    listOf("Definition difference", "Formula comparison", "Behavior during necking"),
+                    "1. Engineering Stress (σ) = P / A0 (based on original area). True Stress (σ_true) = P / A_inst (instantaneous area).\n2. Engineering Strain (ε) = ΔL / L0. True Strain (ε_true) = ln(L / L0).\n3. In tensile tests, True Stress continuously increases until fracture, whereas Engineering Stress appears to decrease after UTS due to localized necking."
+                )
+            ),
+            diagram = EngineeringDiagramData(
+                type = DiagramType.STRESS_STRAIN_CURVE,
+                title = "Engineering Stress-Strain Curve for Mild Steel",
+                xAxisLabel = "Strain ε (%)",
+                yAxisLabel = "Stress σ (MPa)",
+                points = listOf(
+                    DiagramPoint(0.1f, 0.35f, "P", "P: Proportional Limit"),
+                    DiagramPoint(0.18f, 0.45f, "E", "E: Elastic Limit"),
+                    DiagramPoint(0.28f, 0.58f, "Y_u", "Y_u: Upper Yield Point"),
+                    DiagramPoint(0.35f, 0.52f, "Y_l", "Y_l: Lower Yield Point"),
+                    DiagramPoint(0.7f, 0.88f, "UTS", "UTS: Ultimate Tensile Strength"),
+                    DiagramPoint(0.92f, 0.68f, "F", "F: Fracture / Rupture")
+                ),
+                processLabels = listOf(
+                    "Elastic Region (Linear slope E)",
+                    "Yield Plateau / Lüders bands",
+                    "Strain Hardening Region",
+                    "Necking & Fracture"
+                ),
+                notes = "Modulus of resilience is the area under elastic region; toughness is total area to fracture.",
+                formula = "σ = E · ε"
+            )
+        )
+    }
+
+    private fun getGenericEngineeringTopic(
+        title: String,
+        subject: String,
+        unitName: String,
+        rawText: String
+    ): TopicSection {
+        return TopicSection(
+            topicId = "top_gen_" + UUID.randomUUID().toString().take(6),
+            topicName = title.ifBlank { "$subject Lecture Principles" },
+            timestampSeconds = 30,
+            definition = "Fundamental engineering principles and core theoretical derivation for $subject ($unitName).",
+            simpleExplanation = "This lecture establishes the governing laws, systematic mathematical analysis, and boundary condition modeling for $title. Key focus is placed on university examination derivations and numerical problem solving.",
+            keyPoints = listOf(
+                "Core theoretical framework for $unitName.",
+                "Step-by-step mathematical derivation of governing state equations.",
+                "Validation of assumptions and experimental boundary conditions.",
+                "Engineering synthesis and exam scoring tips."
+            ),
+            workingProcess = "1. State problem definition and fundamental governing laws.\n2. Formulate differential/integral balance equation across control volume.\n3. Apply initial and boundary conditions.\n4. Integrate and simplify to obtain analytical engineering solution.",
+            formula = "f(x, y) = ∑ C_n · Φ_n(x, y)",
+            variablesAndUnits = listOf(
+                "f = Primary response variable (standard SI unit)",
+                "C_n = Coefficient matrix",
+                "x, y = Spatial coordinates (m)",
+                "t = Time domain (s)"
+            ),
+            exampleProblem = "Substitute boundary constraints at state 1 and state 2 to evaluate primary response amplitude and verify conservation laws.",
+            advantages = listOf("Provides rigorous mathematical basis for $subject design.", "Ensures compliance with standard engineering syllabus."),
+            disadvantages = listOf("Requires clear boundary conditions.", "Assumes idealized material/flow characteristics."),
+            applications = listOf("Design optimization, experimental benchmarking, and academic coursework."),
+            importantExamPoints = listOf(
+                "⭐ Exam Rule: State all engineering assumptions before writing the governing equation.",
+                "🔥 Carry SI units throughout all intermediate calculation steps for maximum credit.",
+                "💡 Draw clear labelled schematic diagram alongside all 5 and 7-mark answers."
+            ),
+            answers = listOf(
+                MarkAnswer(
+                    2,
+                    "2-Mark Answer: State Primary Definition and Significance",
+                    listOf("Direct definition", "Engineering significance"),
+                    "Define the primary concept for $title clearly with its governing formula and SI unit of measurement."
+                ),
+                MarkAnswer(
+                    5,
+                    "5-Mark Answer: Detailed Working Principle and Derivation",
+                    listOf("Governing equations", "Assumptions", "Step-by-step derivation"),
+                    "1. Assumptions: Standard temperature, pressure, and homogeneous media.\n2. Governing equations formulated from fundamental conservation laws.\n3. Final derived form and practical engineering application."
+                )
+            ),
+            diagram = EngineeringDiagramData(
+                type = DiagramType.GENERIC_GRAPH,
+                title = "$title Analytical Model",
+                xAxisLabel = "Independent Parameter X",
+                yAxisLabel = "System Response Y",
+                points = listOf(
+                    DiagramPoint(0.15f, 0.25f, "A", "A: Initial State / Boundary"),
+                    DiagramPoint(0.55f, 0.75f, "B", "B: Peak Transient Response"),
+                    DiagramPoint(0.85f, 0.65f, "C", "C: Steady-State Equilibrium")
+                ),
+                processLabels = listOf(
+                    "State A → B: Transient response",
+                    "State B → C: Stabilization to equilibrium"
+                ),
+                notes = "Analytical model verified against standard engineering curriculum.",
+                formula = "Y = f(X)"
+            )
+        )
     }
 }
